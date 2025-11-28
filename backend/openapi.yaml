@@ -1,0 +1,216 @@
+
+---
+
+# 3) OpenAPI — ключевые эндпоинты (YAML / FastAPI compatible)
+
+Сниппет включает схемы запросов/ответов. Вставь в `docs/openapi-snippet.yaml` или используй как основу для FastAPI pydantic моделей.
+
+```yaml
+openapi: 3.0.3
+info:
+  title: Biometric Auth API
+  version: "0.1.0"
+paths:
+  /auth/register:
+    post:
+      summary: Register user (email/password/pin + consent)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+  /auth/login:
+    post:
+      summary: Login with email/password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+  /auth/login/pin:
+    post:
+      summary: Login with PIN (fallback)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PinLoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+  /biometrics/face/enroll:
+    post:
+      summary: Upload face images for enrollment
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '200':
+          description: enrolled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollResponse'
+  /biometrics/face/verify:
+    post:
+      summary: Verify face (images -> score)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '200':
+          description: result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+  /biometrics/voice/challenge:
+    get:
+      summary: Get voice challenge
+      responses:
+        '200':
+          description: challenge
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challenge:
+                    type: string
+  /biometrics/voice/enroll:
+    post:
+      summary: Upload WAV for voice enrollment
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                challenge:
+                  type: string
+      responses:
+        '200':
+          description: enrolled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollResponse'
+  /biometrics/voice/verify:
+    post:
+      summary: Verify voice
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                challenge:
+                  type: string
+      responses:
+        '200':
+          description: result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email,password,pin,consent]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        pin:
+          type: string
+        consent:
+          type: boolean
+    LoginRequest:
+      type: object
+      required: [email,password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+    PinLoginRequest:
+      type: object
+      required: [email,pin]
+      properties:
+        email:
+          type: string
+        pin:
+          type: string
+    AuthTokens:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+    EnrollResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        embedding_saved:
+          type: boolean
+    VerifyResponse:
+      type: object
+      properties:
+        match:
+          type: boolean
+        score:
+          type: number
+        liveness:
+          type: string

@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    container_name: biometric-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    container_name: biometric-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+
+  db:
+    image: postgres:15
+    container_name: biometric-db
+    restart: always
+    environment:
+      POSTGRES_USER: biometric
+      POSTGRES_PASSWORD: biometricpass
+      POSTGRES_DB: biometricdb
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

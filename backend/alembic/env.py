@@ -19,7 +19,9 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 from app.db.base import Base
-from app.models import user
+from app.models.user import User
+from app.models.audit import AuditLog
+from app.models.biometric import Biometric
 target_metadata = Base.metadata
 
 

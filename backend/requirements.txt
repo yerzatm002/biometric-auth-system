@@ -6,3 +6,14 @@ python-multipart
 pydantic
 passlib[bcrypt]
 cryptography
+pydantic[email]
+PyJWT
+pydantic-settings
+psycopg2-binary
+argon2-cffi
+
+# Face recognition (CPU-friendly)
+onnxruntime
+opencv-python-headless
+numpy
+insightface==0.7.3

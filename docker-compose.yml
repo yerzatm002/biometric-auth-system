@@ -11,6 +11,8 @@ services:
       - ./backend/.env
     depends_on:
       - db
+    volumes:
+      - insightface_models:/root/.insightface
 
   frontend:
     build: ./frontend
@@ -31,6 +33,8 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./certs:/app/certs:ro
 
 volumes:
   postgres_data:
+  insightface_models:

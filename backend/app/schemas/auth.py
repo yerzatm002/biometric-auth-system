@@ -12,3 +12,11 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+class SetPinRequest(BaseModel):
+    user_id: int
+    pin: str
+
+class PinLoginRequest(BaseModel):
+    user_id: int
+    pin: str

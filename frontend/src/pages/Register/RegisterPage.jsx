@@ -33,8 +33,8 @@ export default function RegisterPage() {
     pin: "",
   });
 
-  const [userId, setUserId] = useState(null);
   const [error, setError] = useState("");
+  const [userId, setUserId] = useState(null);
 
   const setAuth = useAuthStore((s) => s.setAuth);
 
@@ -48,29 +48,66 @@ export default function RegisterPage() {
     setActiveStep((prev) => prev - 1);
   };
 
-  // StepPin аяқталғаннан кейін тіркеу request
-  const handleSubmitRegister = async () => {
+  /**
+   * После StepPin:
+   * 1) register -> получаем userId
+   * 2) login -> получаем access_token
+   * 3) setAuth(token) -> userId извлечётся из JWT (sub)
+   * 4) идём в FaceEnroll
+   */
+  const handleSubmitRegister = async (pin) => {
     setError("");
+
     try {
-      const payload = {
+      // ✅ Подстрахуем pin (строка, 4 цифры)
+      const safePin = String(pin || "").trim();
+
+      if (!/^\d{4}$/.test(safePin)) {
+        throw new Error("PIN дұрыс емес. 4 цифр енгізіңіз.");
+      }
+
+      // 1) REGISTER (без pin!)
+      const registerPayload = {
         email: formData.email,
         password: formData.password,
-        pin: formData.pin,
       };
 
-      const res = await authApi.register(payload); // {id, email}
-      setUserId(res.id);
+      const registerRes = await authApi.register(registerPayload);
+      const newUserId = registerRes?.id;
 
-      // userId store-ға сақтаймыз
-      setAuth({ accessToken: null, userId: res.id });
+      if (!newUserId) {
+        throw new Error("Register response ішінде user id жоқ.");
+      }
+      setUserId(newUserId);
 
-      goNext(); // Face Enroll қадамына өтеміз
+      // 2) LOGIN сразу после регистрации (чтобы получить Bearer token)
+      const loginRes = await authApi.login({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (!loginRes?.access_token) {
+        throw new Error("Login token алынбады. Backend login endpoint тексеріңіз.");
+      }
+
+      // сохраняем токен
+      setAuth({ accessToken: loginRes.access_token });
+
+      // 3) SET PIN — ✅ pin берём НЕ из state, а из аргумента
+      await authApi.setPin({
+        user_id: newUserId,
+        pin: safePin,
+      });
+
+      // 4) переход к FaceEnroll
+      goNext();
     } catch (err) {
       setError(getErrorMessage(err));
     }
   };
 
-  // Face enroll аяқталғаннан кейін login бетіне өтеміз
+
+
   const handleFinish = () => {
     setActiveStep(0);
     setFormData({
@@ -105,7 +142,7 @@ export default function RegisterPage() {
             </Alert>
           ) : null}
 
-          {/* ===== Қадамдар ===== */}
+          {/* ===== Steps ===== */}
           {activeStep === 0 && (
             <StepConsent
               value={formData.consentAccepted}
@@ -141,7 +178,7 @@ export default function RegisterPage() {
               onBack={goBack}
               onNext={(values) => {
                 setFormData((prev) => ({ ...prev, pin: values.pin }));
-                handleSubmitRegister();
+                handleSubmitRegister(values.pin);
               }}
             />
           )}

@@ -8,15 +8,42 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  CircularProgress,
 } from "@mui/material";
 
-export default function FaceCapture({ onCapture }) {
+/**
+ * FaceCapture
+ * mode="single" -> 1 кадр (enroll)
+ * mode="multiframe" -> 2 ключевых кадра (liveness):
+ *   1) смотреть прямо
+ *   2) повернуть голову в сторону
+ * + опционально дополнительные кадры после поворота
+ *
+ * onCapture:
+ * - single: ({ file, previewUrl })
+ * - multiframe: ({ files, previewUrls })
+ */
+export default function FaceCapture({
+  mode = "single",
+
+  // Настройки liveness flow
+  livenessTurnDirection = "right", // "right" | "left"
+  firstShotDelayMs = 250,          // небольшая пауза перед первым снимком
+  turnInstructionDelayMs = 1600,   // время дать пользователю повернуть голову
+  extraFramesAfterTurn = 2,        // ещё кадры после поворота (0..3)
+  extraFrameIntervalMs = 250,      // интервалы доп кадров
+
+  onCapture,
+}) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
   const [cameraError, setCameraError] = useState("");
   const [cameraReady, setCameraReady] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  const [capturing, setCapturing] = useState(false);
+  const [instruction, setInstruction] = useState("");
 
   useEffect(() => {
     let currentStream = null;
@@ -47,28 +74,111 @@ export default function FaceCapture({ onCapture }) {
 
   const handleLoaded = () => setCameraReady(true);
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const captureSingleFrame = () =>
+    new Promise((resolve) => {
+      if (!videoRef.current || !canvasRef.current) return resolve(null);
+
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return resolve(null);
+
+          const file = new File([blob], `frame-${Date.now()}.jpg`, {
+            type: "image/jpeg",
+          });
+
+          const previewUrl = URL.createObjectURL(blob);
+          resolve({ file, previewUrl });
+        },
+        "image/jpeg",
+        0.95
+      );
+    });
+
+  /**
+   * Liveness multiframe capture:
+   * 1) смотреть прямо -> кадр 1
+   * 2) повернуть голову -> кадр 2
+   * 3) опционально ещё кадры после поворота
+   */
+  const captureMultiFrameForLiveness = async () => {
+    const files = [];
+    const previewUrls = [];
+
+    // Инструкция 1: прямо
+    setInstruction("Смотрите прямо в камеру...");
+    await sleep(firstShotDelayMs);
+
+    const frame1 = await captureSingleFrame();
+    if (frame1?.file) {
+      files.push(frame1.file);
+      previewUrls.push(frame1.previewUrl);
+    }
+
+    // Инструкция 2: поворот
+    const dirText = livenessTurnDirection === "left" ? "солға" : "оңға";
+    setInstruction(`Енді басыңызды ${dirText} бұрыңыз...`);
+    await sleep(turnInstructionDelayMs);
+
+    const frame2 = await captureSingleFrame();
+    if (frame2?.file) {
+      files.push(frame2.file);
+      previewUrls.push(frame2.previewUrl);
+    }
+
+    // Дополнительные кадры после поворота (стабилизация)
+    if (extraFramesAfterTurn > 0) {
+      setInstruction("Ұстап тұрыңыз...");
+      for (let i = 0; i < extraFramesAfterTurn; i++) {
+        await sleep(extraFrameIntervalMs);
+        const extra = await captureSingleFrame();
+        if (extra?.file) {
+          files.push(extra.file);
+          previewUrls.push(extra.previewUrl);
+        }
+      }
+    }
+
+    setInstruction("");
+    return { files, previewUrls };
+  };
+
   const capture = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!cameraReady || cameraError) return;
 
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
+    setCapturing(true);
+    try {
+      if (mode === "single") {
+        setInstruction("Смотрите прямо в камеру...");
+        await sleep(250);
 
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+        const result = await captureSingleFrame();
+        setInstruction("");
+        if (!result) return;
 
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        onCapture?.(result);
+        return;
+      }
 
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const file = new File([blob], "face.jpg", { type: "image/jpeg" });
-        const previewUrl = URL.createObjectURL(blob);
-        onCapture({ file, previewUrl });
-      },
-      "image/jpeg",
-      0.95
-    );
+      // multiframe liveness mode
+      const result = await captureMultiFrameForLiveness();
+      if (!result?.files?.length) return;
+
+      onCapture?.(result);
+    } finally {
+      setCapturing(false);
+      setInstruction("");
+    }
   };
 
   return (
@@ -88,6 +198,7 @@ export default function FaceCapture({ onCapture }) {
           border: "1px solid",
           borderColor: "grey.200",
           bgcolor: "black",
+          position: "relative",
         }}
       >
         <video
@@ -97,6 +208,22 @@ export default function FaceCapture({ onCapture }) {
           onLoadedData={handleLoaded}
           style={{ width: "100%", height: "auto" }}
         />
+
+        {instruction ? (
+          <Box
+            sx={{
+              position: "absolute",
+              bottom: 0,
+              width: "100%",
+              p: 1,
+              bgcolor: "rgba(0,0,0,0.55)",
+            }}
+          >
+            <Typography variant="body2" color="white">
+              {instruction}
+            </Typography>
+          </Box>
+        ) : null}
       </Box>
 
       <canvas ref={canvasRef} style={{ display: "none" }} />
@@ -111,9 +238,10 @@ export default function FaceCapture({ onCapture }) {
         <Button
           variant="outlined"
           onClick={capture}
-          disabled={!cameraReady || !!cameraError}
+          disabled={!cameraReady || !!cameraError || capturing}
+          startIcon={capturing ? <CircularProgress size={18} /> : null}
         >
-          Фото түсіру
+          {mode === "single" ? "Фото түсіру" : "Face тексеру"}
         </Button>
 
         {cameraError ? (

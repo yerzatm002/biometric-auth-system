@@ -6,26 +6,37 @@ import LoginPage from "../pages/Login/LoginPage";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
 
 import ProtectedRoute from "../features/auth/ProtectedRoute";
+import { useAuthStore } from "../features/auth/authStore";
+
+function PublicOnly({ children }) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isFaceVerified = useAuthStore((s) => s.isFaceVerified);
+
+  // если уже вошёл полностью → сразу в dashboard
+  if (isAuthenticated && isFaceVerified) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+}
 
 export const router = createBrowserRouter([
   {
     path: "/",
     element: <Layout />,
     children: [
-      // default route
       { index: true, element: <Navigate to="/login" replace /> },
 
-      // public routes
       { path: "register", element: <RegisterPage /> },
-      { path: "login", element: <LoginPage /> },
 
-      // protected routes group
+      // login — доступен только пока пользователь не вошёл полностью
+      { path: "login", element: <PublicOnly><LoginPage /></PublicOnly> },
+
       {
         element: <ProtectedRoute />,
         children: [{ path: "dashboard", element: <DashboardPage /> }],
       },
 
-      // fallback
       { path: "*", element: <Navigate to="/login" replace /> },
     ],
   },

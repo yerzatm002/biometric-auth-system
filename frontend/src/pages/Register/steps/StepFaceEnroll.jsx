@@ -1,10 +1,18 @@
 import { useState } from "react";
 import { Box, Typography, Button, Alert } from "@mui/material";
+
 import FaceCapture from "../../../features/biometrics/FaceCapture";
 import { faceApi } from "../../../features/biometrics/faceApi";
+import { useAuthStore } from "../../../features/auth/authStore";
 import { getErrorMessage } from "../../../shared/utils/errors";
 
-export default function StepFaceEnroll({ userId, onBack, onFinish, onError }) {
+export default function StepFaceEnroll({ userId: userIdFromProps, onBack, onFinish, onError }) {
+  const storeUserId = useAuthStore((s) => s.userId);
+  const accessToken = useAuthStore((s) => s.accessToken);
+
+  // берём userId из store (приоритетно), иначе из props
+  const effectiveUserId = storeUserId ?? userIdFromProps ?? null;
+
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,10 +25,16 @@ export default function StepFaceEnroll({ userId, onBack, onFinish, onError }) {
   };
 
   const handleEnroll = async () => {
-    if (!userId) {
+    if (!accessToken) {
+      onError("Қате: access token жоқ. Тіркелуді қайта орындаңыз немесе қайта кіріңіз.");
+      return;
+    }
+
+    if (!effectiveUserId) {
       onError("Пайдаланушы ID табылмады. Қайта тіркеліп көріңіз.");
       return;
     }
+
     if (!file) {
       onError("Алдымен фото түсіріңіз.");
       return;
@@ -28,7 +42,7 @@ export default function StepFaceEnroll({ userId, onBack, onFinish, onError }) {
 
     setLoading(true);
     try {
-      await faceApi.faceEnroll({ userId, file });
+      await faceApi.faceEnroll({ userId: effectiveUserId, file });
       setSuccess(true);
     } catch (err) {
       onError(getErrorMessage(err));
@@ -47,7 +61,7 @@ export default function StepFaceEnroll({ userId, onBack, onFinish, onError }) {
         Камераға рұқсат беріңіз және бетіңіз анық көрінетіндей фото түсіріңіз.
       </Typography>
 
-      <FaceCapture onCapture={handleCapture} />
+      <FaceCapture mode="single" onCapture={handleCapture} />
 
       {previewUrl ? (
         <Box sx={{ mt: 2 }}>

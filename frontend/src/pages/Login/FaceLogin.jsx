@@ -1,62 +1,50 @@
-import { useMemo, useState } from "react";
-import { Box, Typography, TextField, Button, Alert } from "@mui/material";
+import { useState } from "react";
+import { Box, Typography, Alert } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 
-import FaceCapture from "../../features/biometrics/FaceCapture";
+import FaceVerifyGuided from "../../features/biometrics/FaceVerifyGuided";
 import { faceApi } from "../../features/biometrics/faceApi";
 import { useAuthStore } from "../../features/auth/authStore";
 import { getErrorMessage } from "../../shared/utils/errors";
 
-export default function FaceLogin({ onFallbackToPin }) {
+export default function FaceLogin({ onSuccess, onFallbackToPin }) {
   const navigate = useNavigate();
 
-  // ✅ МІНЕ ОСЫ ЕКІ ЖОЛ — ҚАТЕНІ ЖОЯДЫ
-  const storedUserId = useAuthStore((s) => s.userId);
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const userId = useAuthStore((s) => s.userId);
+  const setFaceVerified = useAuthStore((s) => s.setFaceVerified);
 
-  const [userIdInput, setUserIdInput] = useState(storedUserId || "");
-  const [file, setFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [resultInfo, setResultInfo] = useState("");
 
-  const effectiveUserId = useMemo(() => {
-    const n = Number(userIdInput);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  }, [userIdInput]);
-
-  const handleCapture = ({ file, previewUrl }) => {
-    setFile(file);
-    setPreviewUrl(previewUrl);
+  const handleComplete = async (files) => {
     setResultInfo("");
-  };
 
-  const handleVerify = async () => {
-    if (!effectiveUserId) {
-      setResultInfo("user_id енгізіңіз (мысалы: 1).");
+    if (!userId) {
+      setResultInfo("Қате: userId табылмады. Алдымен email/password арқылы кіріңіз.");
       return;
     }
-    if (!file) {
-      setResultInfo("Алдымен фото түсіріңіз.");
+
+    if (!files || files.length !== 2) {
+      setResultInfo("Қате: 2 фото қажет (тура + бұрылу).");
       return;
     }
 
     setLoading(true);
-    setResultInfo("");
-
     try {
-      const res = await faceApi.faceVerify({
-        userId: effectiveUserId,
-        file,
+      const res = await faceApi.faceVerifyMultiFrame({
+        userId,
+        files,
       });
 
-      if (res?.verified && res?.access_token) {
-        setAuth({ accessToken: res.access_token, userId: effectiveUserId });
+      if (res?.verified) {
+        setFaceVerified(true);
+        onSuccess?.();
         navigate("/dashboard", { replace: true });
         return;
       }
 
-      onFallbackToPin("Face ID арқылы тексеру сәтсіз. PIN арқылы кіріңіз.");
+      // если не прошел — fallback pin
+      onFallbackToPin?.("Face тексеру өтпеді. PIN арқылы кіріңіз.");
     } catch (err) {
       setResultInfo(getErrorMessage(err));
     } finally {
@@ -67,58 +55,22 @@ export default function FaceLogin({ onFallbackToPin }) {
   return (
     <Box>
       <Typography variant="h6" gutterBottom>
-        Face ID арқылы кіру
+        Face ID арқылы кіру (liveness)
       </Typography>
 
-      <Box sx={{ mb: 2 }}>
-        <TextField
-          label="user_id"
-          value={userIdInput}
-          onChange={(e) => setUserIdInput(e.target.value)}
-          fullWidth
-        />
-      </Box>
-
-      <FaceCapture onCapture={handleCapture} />
-
-      {previewUrl ? (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Алдын ала қарау:
-          </Typography>
-          <Box
-            component="img"
-            src={previewUrl}
-            alt="preview"
-            sx={{
-              width: "100%",
-              maxWidth: 360,
-              borderRadius: 2,
-              border: "1px solid",
-              borderColor: "grey.200",
-            }}
-          />
-        </Box>
-      ) : null}
-
       {resultInfo ? (
-        <Alert severity="info" sx={{ mt: 2 }}>
+        <Alert severity="info" sx={{ mb: 2 }}>
           {resultInfo}
         </Alert>
       ) : null}
 
-      <Box sx={{ mt: 3, display: "flex", gap: 1 }}>
-        <Button variant="contained" onClick={handleVerify} disabled={loading}>
-          {loading ? "Тексерілуде..." : "Фото түсіріп тексеру"}
-        </Button>
+      {loading ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Тексерілуде...
+        </Alert>
+      ) : null}
 
-        <Button
-          variant="outlined"
-          onClick={() => onFallbackToPin("PIN арқылы кіріңіз.")}
-        >
-          PIN арқылы кіру
-        </Button>
-      </Box>
+      <FaceVerifyGuided onComplete={handleComplete} />
     </Box>
   );
 }

@@ -9,10 +9,25 @@ import {
   TableCell,
   TableBody,
   Typography,
+  Chip,
 } from "@mui/material";
 
 import { auditApi } from "./auditApi";
 import { getErrorMessage } from "../../shared/utils/errors";
+
+function formatDate(value) {
+  if (!value) return "-";
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? "-" : d.toLocaleString();
+}
+
+function formatStatus(value) {
+  if (value === true) return "SUCCESS";
+  if (value === false) return "FAILED";
+  if (value === "success") return "SUCCESS";
+  if (value === "failed") return "FAILED";
+  return value ?? "-";
+}
 
 export default function AuditTable() {
   const [loading, setLoading] = useState(true);
@@ -29,16 +44,20 @@ export default function AuditTable() {
       try {
         const data = await auditApi.getAudit();
 
-        // Backend response structure болуы мүмкін:
-        // 1) массив: [{...}, {...}]
-        // 2) объект: { items: [...] }
-        // 3) объект: { logs: [...] }
         const items =
           Array.isArray(data) ? data : data?.items || data?.logs || [];
 
         if (!ignore) setRows(items);
       } catch (err) {
-        if (!ignore) setError(getErrorMessage(err));
+        const status = err?.response?.status;
+
+        if (!ignore) {
+          if (status === 404) {
+            setError("Audit endpoint табылмады (/audit). Backend route-ты тексеріңіз.");
+          } else {
+            setError(getErrorMessage(err));
+          }
+        }
       } finally {
         if (!ignore) setLoading(false);
       }
@@ -78,9 +97,6 @@ export default function AuditTable() {
     );
   }
 
-  // Универсал кесте: сервер қайтарып жатқан құрылымға тәуелсіз
-  // Күтілетін өрістер болуы мүмкін: id, user_id, event_type, created_at, ip_address, status
-  // Біз мүмкін болатын өрістерді шығарамыз:
   return (
     <Box sx={{ overflowX: "auto" }}>
       <Table size="small">
@@ -96,24 +112,30 @@ export default function AuditTable() {
         </TableHead>
 
         <TableBody>
-          {rows.map((row, idx) => (
-            <TableRow key={row.id ?? idx}>
-              <TableCell>{row.id ?? "-"}</TableCell>
-              <TableCell>{row.user_id ?? row.userId ?? "-"}</TableCell>
-              <TableCell>{row.event_type ?? row.event ?? row.action ?? "-"}</TableCell>
-              <TableCell>
-                {row.created_at
-                  ? new Date(row.created_at).toLocaleString()
-                  : row.timestamp
-                  ? new Date(row.timestamp).toLocaleString()
-                  : "-"}
-              </TableCell>
-              <TableCell>{row.ip_address ?? row.ip ?? "-"}</TableCell>
-              <TableCell>
-                {row.status ?? row.success ?? row.result ?? "-"}
-              </TableCell>
-            </TableRow>
-          ))}
+          {rows.map((row, idx) => {
+            const id = row.id ?? `${row.user_id ?? "u"}-${row.created_at ?? idx}-${idx}`;
+            const status = formatStatus(row.status ?? row.success ?? row.result);
+
+            return (
+              <TableRow key={id}>
+                <TableCell>{row.id ?? "-"}</TableCell>
+                <TableCell>{row.user_id ?? row.userId ?? "-"}</TableCell>
+                <TableCell>{row.event_type ?? row.event ?? row.action ?? "-"}</TableCell>
+                <TableCell>
+                  {formatDate(row.created_at ?? row.timestamp)}
+                </TableCell>
+                <TableCell>{row.ip_address ?? row.ip ?? "-"}</TableCell>
+                <TableCell>
+                  <Chip
+                    size="small"
+                    label={status}
+                    color={status === "SUCCESS" ? "success" : status === "FAILED" ? "error" : "default"}
+                    variant="outlined"
+                  />
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </Box>

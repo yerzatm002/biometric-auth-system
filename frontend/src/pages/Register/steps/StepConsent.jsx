@@ -9,36 +9,42 @@ import {
 } from "@mui/material";
 import { apiClient } from "../../../shared/api/apiClient";
 
+const DEFAULT_TEXT =
+  "Мен биометриялық деректерімді аутентификация мақсатында өңдеуге келісім беремін. " +
+  "Сурет пен файл бастапқы түрде сақталмайды, тек шифрланған эмбеддингтер сақталады.";
+
 export default function StepConsent({ value, onChange, onNext, onError }) {
   const [loading, setLoading] = useState(false);
   const [consentText, setConsentText] = useState("");
   const [fetchInfo, setFetchInfo] = useState("");
 
+  // Флаг: доступен ли consent API
+  const [consentApiAvailable, setConsentApiAvailable] = useState(false);
+
   useEffect(() => {
-    let ignore = false;
+    const controller = new AbortController();
 
     async function loadConsent() {
       try {
-        const res = await apiClient.get("/consent");
-        if (!ignore) setConsentText(res.data?.text || "");
+        const res = await apiClient.get("/consent", {
+          signal: controller.signal,
+        });
+
+        setConsentApiAvailable(true);
+        setConsentText(res.data?.text || DEFAULT_TEXT);
       } catch (err) {
-        // Бэкендтен келіспеген жағдайда UI бұзылмасын
-        if (!ignore) {
-          setFetchInfo(
-            "Келісім мәтіні серверден алынбады. Әдепкі мәтін көрсетіледі."
-          );
-          setConsentText(
-            "Мен биометриялық деректерімді аутентификация мақсатында өңдеуге келісім беремін. " +
-              "Сурет пен файл бастапқы түрде сақталмайды, тек шифрланған эмбеддингтер сақталады."
-          );
-        }
+        // Если запрос отменён — ничего не делаем
+        if (controller.signal.aborted) return;
+
+        // Если endpoint отсутствует или ошибка — используем дефолтный текст
+        setConsentApiAvailable(false);
+        setFetchInfo("Келісім мәтіні серверден алынбады. Әдепкі мәтін көрсетіледі.");
+        setConsentText(DEFAULT_TEXT);
       }
     }
 
     loadConsent();
-    return () => {
-      ignore = true;
-    };
+    return () => controller.abort();
   }, []);
 
   const handleAccept = async () => {
@@ -49,10 +55,13 @@ export default function StepConsent({ value, onChange, onNext, onError }) {
 
     setLoading(true);
     try {
-      await apiClient.post("/consent/accept", { accepted: true });
+      // accept вызываем только если consent API доступен
+      if (consentApiAvailable) {
+        await apiClient.post("/consent/accept", { accepted: true });
+      }
       onNext();
     } catch (err) {
-      // accept endpoint жоқ болса да, тіркеуді тоқтатпаймыз
+      // Даже если accept упал — не блокируем регистрацию
       onNext();
     } finally {
       setLoading(false);

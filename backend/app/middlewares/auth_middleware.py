@@ -10,12 +10,16 @@ PUBLIC_PATHS = [
 
 async def auth_middleware(request: Request, call_next):
 
-    # позволяем публичные пути
+    # ✅ 1) Пропускаем CORS preflight
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    # ✅ 2) Разрешаем публичные пути
     for path in PUBLIC_PATHS:
         if request.url.path.startswith(path):
             return await call_next(request)
 
-    # проверяем токен
+    # ✅ 3) Проверяем токен
     token = request.headers.get("Authorization")
     if not token:
         raise HTTPException(401, "Missing access token")

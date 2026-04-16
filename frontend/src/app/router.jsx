@@ -12,7 +12,7 @@ function PublicOnly({ children }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isFaceVerified = useAuthStore((s) => s.isFaceVerified);
 
-  // если уже вошёл полностью → сразу в dashboard
+
   if (isAuthenticated && isFaceVerified) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -28,8 +28,6 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/login" replace /> },
 
       { path: "register", element: <RegisterPage /> },
-
-      // login — доступен только пока пользователь не вошёл полностью
       { path: "login", element: <PublicOnly><LoginPage /></PublicOnly> },
 
       {

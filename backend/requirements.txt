@@ -1,6 +1,8 @@
 fastapi
 uvicorn[standard]
 sqlalchemy
+alembic==1.13.1
+psycopg2-binary==2.9.9
 asyncpg
 python-multipart
 pydantic
@@ -9,7 +11,6 @@ cryptography
 pydantic[email]
 PyJWT
 pydantic-settings
-psycopg2-binary
 argon2-cffi
 
 # Face recognition (CPU-friendly)

@@ -24,6 +24,8 @@ from app.models.audit import AuditLog
 from app.models.biometric import Biometric
 target_metadata = Base.metadata
 
+import os
+
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -43,7 +45,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
     context.configure(
         url=url,
         target_metadata=target_metadata,
